@@ -12,10 +12,10 @@ export default async function handler(req, res) {
     const answer = await callOpenRouter(question)
     res.status(200).json({
       answer: answer.trim(),
-      sources: [] // no sources since we’re not doing web search
+      sources: []
     })
   } catch (err) {
-    console.error(err)
+    console.error("API ERROR:", err.message)
     res.status(500).json({ error: err.message })
   }
 }
@@ -30,45 +30,53 @@ async function callOpenRouter(prompt) {
     headers: {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${key}`,
-      // optional but recommended by OpenRouter:
-      'HTTP-Referer': 'http://localhost:3000',
-      'X-Title': 'Salesforce Chatbot'
+      'HTTP-Referer': 'https://salesgenie.vercel.app/', // 👈 update to your real domain
+      'X-Title': 'SalesGenie'
     },
     body: JSON.stringify({
-      model: 'openai/gpt-4o-mini', // can swap with other models if you like
+      model: 'openai/gpt-4o-mini',
       messages: [
-        { role: 'system', content: 'You are a helpful Salesforce developer assistant. Format answers as plain text (no markdown).' },
+        {
+          role: 'system',
+          content: `You are a helpful Salesforce assistant.
+If the user asks for a process flow, workflow, or diagram:
+- Respond in Mermaid.js format only (no explanations).
+- Always start your reply with "flow:" on the first line.
+Example:
+flow:
+flowchart TD
+    A[Lead] --> B[Opportunity]
+    B --> C[Proposal]
+    C --> D[Closed Won]
+
+Otherwise, respond in plain text only (no markdown, no formatting).`
+        },
         { role: 'user', content: prompt }
       ],
-      temperature: 0,
-      max_tokens: 500
+      temperature: 0.3,
+      max_tokens: 600
     })
   })
 
   if (!resp.ok) {
     const txt = await resp.text()
-    throw new Error('OpenRouter error: ' + resp.status + ' ' + txt)
+    throw new Error(`OpenRouter error ${resp.status}: ${txt}`)
   }
 
   const j = await resp.json()
-  const rawAnswer = j.choices?.[0]?.message?.content || ''
-  return cleanMarkdown(rawAnswer)
+  console.log("OpenRouter raw response:", j) // 👈 helpful in Vercel logs
+  return cleanMarkdown(j.choices?.[0]?.message?.content || '')
 }
 
 // --- Markdown cleanup ---
 function cleanMarkdown(text) {
   if (!text) return ''
   return text
-    // remove code fences like ```sql or ```
     .replace(/```[a-z]*\n?/gi, '')
     .replace(/```/g, '')
-    // remove Markdown headings ###, ##
     .replace(/^#+\s*/gm, '')
-    // remove bold/italic markers ** and *
     .replace(/\*\*/g, '')
     .replace(/\*/g, '')
-    // remove underscores
     .replace(/_/g, '')
-    // trim extra spaces
     .trim()
 }

@@ -1,33 +1,22 @@
 // components/FlowChart.js
-import { useEffect, useRef } from "react";
+import React, { useEffect, useRef } from "react";
 import mermaid from "mermaid";
 
-export default function FlowChart({ chartCode }) {
+export default function FlowChart({ chartDef }) {
   const ref = useRef(null);
 
   useEffect(() => {
+    mermaid.initialize({ startOnLoad: true, theme: "dark" });
     if (ref.current) {
-      try {
-        mermaid.contentLoaded(); // re-render Mermaid blocks
-      } catch (err) {
-        console.error("Mermaid render error:", err);
-      }
+      mermaid.contentLoaded();
     }
-  }, [chartCode]);
+  }, [chartDef]);
 
   return (
-    <div
-      ref={ref}
-      className="mermaid"
-      style={{
-        background: "#1e1e1e",
-        color: "white",
-        padding: "1rem",
-        borderRadius: "8px",
-        marginTop: "1rem",
-      }}
-    >
-      {chartCode}
+    <div className="flowchart">
+      <div className="mermaid" ref={ref}>
+        {chartDef}
+      </div>
     </div>
   );
 }

@@ -2,35 +2,19 @@
 import React, { useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import FlowChart from "../components/FlowChart"; // 👈 new import
-
-function normalizeMarkdown(text) {
-  if (!text) return "";
-  let s = text.replace(/\r\n/g, "\n");
-
-  // Fix "1.\n\nText" -> "1. Text"
-  s = s.replace(/(\d+)\.\s*\n\s*/g, "$1. ");
-
-  // Fix "-\nText" -> "- Text"
-  s = s.replace(/^\s*[-*]\s*\n+/gm, "- ");
-
-  // Make titles bold (after number, before colon)
-  s = s.replace(/^(\d+\.\s*)([^:]+)(:)/gm, (_, num, title, colon) => {
-    return `${num} **${title.trim()}**${colon}`;
-  });
-
-  return s.trim();
-}
+import FlowChart from "./FlowChart";
 
 export default function ChatBox() {
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState([
+    { role: "assistant", type: "text", content: "Hello! How can I assist you today?" }
+  ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function sendMessage() {
     if (!input.trim()) return;
 
-    const userMsg = { role: "user", content: input, type: "text" };
+    const userMsg = { role: "user", type: "text", content: input };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setLoading(true);
@@ -39,34 +23,26 @@ export default function ChatBox() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: userMsg.content }),
+        body: JSON.stringify({ question: input }),
       });
 
+      if (!res.ok) throw new Error("Network response failed");
       const data = await res.json();
-      const reply = data.answer ?? data.reply ?? "No answer returned";
 
-      // Check if reply looks like a flowchart (starts with "flow:")
-      if (reply.startsWith("flow:")) {
-        const chartCode = reply.replace("flow:", "").trim();
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", type: "flowchart", content: chartCode },
-        ]);
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          { role: "assistant", type: "text", content: reply },
-        ]);
+      let type = "text";
+      let content = data.answer;
+
+      if (content.startsWith("flow:")) {
+        type = "flowchart";
+        content = content.replace(/^flow:\s*/, "");
       }
+
+      setMessages((prev) => [...prev, { role: "assistant", type, content }]);
     } catch (err) {
       console.error(err);
       setMessages((prev) => [
         ...prev,
-        {
-          role: "assistant",
-          type: "text",
-          content: "Error: Could not get a response.",
-        },
+        { role: "assistant", type: "text", content: "⚠️ Something went wrong. Please try again." },
       ]);
     } finally {
       setLoading(false);
@@ -75,50 +51,28 @@ export default function ChatBox() {
 
   return (
     <div className="chat-container">
-      <div className="chat-history">
-        {messages.length === 0 && (
-          <div className="message system">
-            Say something like: "Show me a sales process flow"
-          </div>
-        )}
-
-        {messages.map((m, i) => (
-          <div key={i} className={`message ${m.role}`}>
-            <strong>{m.role === "user" ? "User:" : "Assistant:"}</strong>
-            <div className="message-text">
-              {m.type === "flowchart" ? (
-                <FlowChart chartCode={m.content} />
-              ) : (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {normalizeMarkdown(m.content)}
-                </ReactMarkdown>
-              )}
-            </div>
+      <div className="chat-box">
+        {messages.map((msg, idx) => (
+          <div key={idx} className={`message ${msg.role}`}>
+            {msg.type === "flowchart" ? (
+              <FlowChart chartDef={msg.content} />
+            ) : (
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                {msg.content}
+              </ReactMarkdown>
+            )}
           </div>
         ))}
+        {loading && <div className="message assistant">💭 Thinking...</div>}
       </div>
-
-      <div className="chat-input-row">
+      <div className="input-container">
         <textarea
-          className="chat-input"
-          rows={3}
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              sendMessage();
-            }
-          }}
-          placeholder="Ask a Salesforce question..."
+          placeholder="Type your question here..."
+          rows={2}
         />
-        <button
-          className="chat-button"
-          onClick={sendMessage}
-          disabled={loading}
-        >
-          {loading ? "Thinking..." : "Send"}
-        </button>
+        <button onClick={sendMessage}>Send</button>
       </div>
     </div>
   );

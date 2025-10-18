@@ -1,15 +1,20 @@
-// components/ChatBox.js
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import FlowChart from "./FlowChart";
 
 export default function ChatBox() {
   const [messages, setMessages] = useState([
-    { role: "assistant", type: "text", content: "Hello! How can I assist you today?" }
+    { role: "assistant", type: "text", content: "Hello! How can I assist you today?" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const chatEndRef = useRef(null);
+
+  // Auto-scroll to bottom
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
 
   async function sendMessage() {
     if (!input.trim()) return;
@@ -23,54 +28,40 @@ export default function ChatBox() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ question: input }),
+        body: JSON.stringify({ message: input }),
       });
 
-      if (!res.ok) throw new Error("Network response failed");
       const data = await res.json();
+      const reply = data.reply || "⚠️ Something went wrong.";
 
-      let type = "text";
-      let content = data.answer;
-
-      if (content.startsWith("flow:")) {
-        type = "flowchart";
-        content = content.replace(/^flow:\s*/, "");
-      }
-
-      setMessages((prev) => [...prev, { role: "assistant", type, content }]);
-    } catch (err) {
-      console.error(err);
-      setMessages((prev) => [
-        ...prev,
-        { role: "assistant", type: "text", content: "⚠️ Something went wrong. Please try again." },
-      ]);
+      setMessages((prev) => [...prev, { role: "assistant", type: "text", content: reply }]);
+    } catch (error) {
+      setMessages((prev) => [...prev, { role: "assistant", type: "text", content: "⚠️ Something went wrong." }]);
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="chat-container">
-      <div className="chat-box">
+    <div className="chat-box">
+      <div className="messages">
         {messages.map((msg, idx) => (
           <div key={idx} className={`message ${msg.role}`}>
-            {msg.type === "flowchart" ? (
-              <FlowChart chartDef={msg.content} />
-            ) : (
-              <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                {msg.content}
-              </ReactMarkdown>
-            )}
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
           </div>
         ))}
-        {loading && <div className="message assistant">💭 Thinking...</div>}
+
+        {loading && <div className="message assistant">Typing...</div>}
+
+        {/* Auto-scroll anchor */}
+        <div ref={chatEndRef} />
       </div>
-      <div className="input-container">
+
+      <div className="input-box">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your question here..."
-          rows={2}
         />
         <button onClick={sendMessage}>Send</button>
       </div>

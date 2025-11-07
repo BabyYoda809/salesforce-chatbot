@@ -1,19 +1,20 @@
+import Image from "next/image";
 import ChatBox from "../components/ChatBox";
+const logo = "/logo.png";
 
 export default function Home() {
   return (
-    <>
+    <div className="page-container">
       <header className="header">
-        <div className="logo-title">
-          {/* Use favicon.ico as small SG logo */}
-          <img src="/favicon.ico" alt="SalesGenie Logo" className="logo-small" />
-          <h1>SalesGenie</h1>
+        <div className="logo-area">
+          <Image src={logo} alt="SalesGenie Logo" width={45} height={45} className="logo" />
+          <h1 className="brand-text">SalesGenie</h1>
         </div>
       </header>
 
-      <div className="chat-wrapper">
+      <main className="main-content">
         <ChatBox />
-      </div>
-    </>
+      </main>
+    </div>
   );
 }

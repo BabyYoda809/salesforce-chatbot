@@ -1,26 +1,37 @@
-import React, { useState, useEffect, useRef } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
+import { useState, useEffect, useRef } from "react";
 
 export default function ChatBox() {
   const [messages, setMessages] = useState([
-    { role: "assistant", type: "text", content: "Hello! How can I assist you today?" },
+    { sender: "bot", text: "Hello! I'm SalesGenie — how can I help with Salesforce today?" },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
-
   const chatEndRef = useRef(null);
 
-  // Auto-scroll to bottom
+  // ✅ Load memory safely
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("salesgenie-messages");
+      if (saved) setMessages(JSON.parse(saved));
+    }
+  }, []);
+
+  // ✅ Save memory
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem("salesgenie-messages", JSON.stringify(messages));
+    }
+  }, [messages]);
+
+  // ✅ Auto-scroll
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function sendMessage() {
+  const handleSend = async () => {
     if (!input.trim()) return;
-
-    const userMsg = { role: "user", type: "text", content: input };
-    setMessages((prev) => [...prev, userMsg]);
+    const newMessages = [...messages, { sender: "user", text: input }];
+    setMessages(newMessages);
     setInput("");
     setLoading(true);
 
@@ -28,42 +39,52 @@ export default function ChatBox() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message: input }),
+        body: JSON.stringify({ messages: newMessages }),
       });
 
       const data = await res.json();
-      const reply = data.reply || "⚠️ Something went wrong.";
 
-      setMessages((prev) => [...prev, { role: "assistant", type: "text", content: reply }]);
-    } catch (error) {
-      setMessages((prev) => [...prev, { role: "assistant", type: "text", content: "⚠️ Something went wrong." }]);
+      if (data?.reply) {
+        setMessages([...newMessages, { sender: "bot", text: data.reply }]);
+      } else {
+        setMessages([...newMessages, { sender: "bot", text: "⚠️ Something went wrong." }]);
+      }
+    } catch {
+      setMessages([...newMessages, { sender: "bot", text: "⚠️ Network error occurred." }]);
     } finally {
       setLoading(false);
     }
-  }
+  };
+
+  const handleClear = () => {
+    localStorage.removeItem("salesgenie-messages");
+    setMessages([
+      { sender: "bot", text: "Hello! I'm SalesGenie — how can I help with Salesforce today?" },
+    ]);
+  };
 
   return (
-    <div className="chat-box">
-      <div className="messages">
-        {messages.map((msg, idx) => (
-          <div key={idx} className={`message ${msg.role}`}>
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+    <div className="chatbox">
+      <div className="chat-messages">
+        {messages.map((msg, i) => (
+          <div key={i} className={`chat-bubble ${msg.sender}`}>
+            {msg.text}
           </div>
         ))}
-
-        {loading && <div className="message assistant">Typing...</div>}
-
-        {/* Auto-scroll anchor */}
+        {loading && <div className="typing-indicator">SalesGenie is typing...</div>}
         <div ref={chatEndRef} />
       </div>
 
-      <div className="input-box">
+      <div className="chat-input">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="Type your question here..."
         />
-        <button onClick={sendMessage}>Send</button>
+        <div className="button-group">
+          <button onClick={handleSend}>Send</button>
+          <button className="clear" onClick={handleClear}>Clear</button>
+        </div>
       </div>
     </div>
   );
